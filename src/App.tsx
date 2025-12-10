@@ -1,15 +1,27 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { ChatHeader } from '@/features/chat/components/ChatHeader'
 import { MessageList } from '@/features/chat/components/MessageList'
 import { PromptPanel } from '@/features/chat/components/PromptPanel'
 import { LoadingOverlay } from '@/features/chat/components/LoadingOverlay'
 import { SettingsDialog } from '@/features/chat/components/SettingsDialog'
 import { useChatSession } from '@/features/chat/hooks/useChatSession'
-import { apiConfig } from '@/features/chat/utils/apiConfig'
+import { apiConfig, type ModelName } from '@/features/chat/utils/apiConfig'
 
 function App() {
   const { state, actions } = useChatSession()
   const [settingsOpen, setSettingsOpen] = useState(!apiConfig.isConfigured())
+  const [model, setModel] = useState<ModelName>(apiConfig.getModel())
+
+  const handleModelChange = (value: ModelName) => {
+    setModel(value)
+    apiConfig.setModel(value)
+  }
+
+  useEffect(() => {
+    if (!settingsOpen) {
+      setModel(apiConfig.getModel())
+    }
+  }, [settingsOpen])
 
   return (
     <div className="flex h-screen w-full flex-col bg-background text-foreground">
@@ -42,9 +54,11 @@ function App() {
         onRemoveUpload={actions.removeUpload}
         aspectRatio={state.aspectRatio}
         imageSize={state.imageSize}
+        model={model}
         includeThinking={state.includeThinking}
         onAspectChange={actions.setAspectRatio}
         onSizeChange={actions.setImageSize}
+        onModelChange={handleModelChange}
         onToggleThinking={actions.setIncludeThinking}
         canEditLast={!!state.lastImageData}
         onEditLast={() => actions.sendPrompt('edit')}

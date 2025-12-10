@@ -1,5 +1,7 @@
 import { useCallback, useReducer } from 'react';
 import { geminiClient } from '../services/geminiClient';
+import { openaiClient } from '../services/openaiClient';
+import { apiConfig } from '../utils/apiConfig';
 import { createSessionId } from '../utils/session';
 import { limitUploads, toUploadItems } from '../utils/files';
 import type { UploadItem, ChatMessage, ChatMode, AspectRatio, ImageSize } from '../types';
@@ -155,12 +157,18 @@ type RequestContext = {
   lastImageData: string | null;
 };
 
+const getClient = () => {
+  const apiType = apiConfig.getType();
+  return apiType === 'openai' ? openaiClient : geminiClient;
+};
+
 const requestHandlers: Record<ChatRequestKind, (ctx: RequestContext) => Promise<GeminiResult>> = {
   [ChatRequestKind.Edit]: ({ lastImageData, promptText, aspectRatio, imageSize, includeThinking, history }) => {
     if (!lastImageData) {
       return Promise.reject(new Error('没有可编辑的图片'));
     }
-    return geminiClient.editImage({
+    const client = getClient();
+    return client.editImage({
       imageData: lastImageData,
       editPrompt: promptText,
       aspectRatio,
@@ -169,31 +177,37 @@ const requestHandlers: Record<ChatRequestKind, (ctx: RequestContext) => Promise<
       history,
     });
   },
-  [ChatRequestKind.Composite]: ({ labelledPrompt, imageDataList, aspectRatio, imageSize, includeThinking, history }) =>
-    geminiClient.compositeImages({
+  [ChatRequestKind.Composite]: ({ labelledPrompt, imageDataList, aspectRatio, imageSize, includeThinking, history }) => {
+    const client = getClient();
+    return client.compositeImages({
       prompt: labelledPrompt,
       imageDataList,
       aspectRatio,
       imageSize,
       includeThinking,
       history,
-    }),
-  [ChatRequestKind.Search]: ({ promptText, aspectRatio, imageSize, includeThinking, history }) =>
-    geminiClient.generateWithSearch({
+    });
+  },
+  [ChatRequestKind.Search]: ({ promptText, aspectRatio, imageSize, includeThinking, history }) => {
+    const client = getClient();
+    return client.generateWithSearch({
       prompt: promptText,
       aspectRatio,
       imageSize,
       includeThinking,
       history,
-    }),
-  [ChatRequestKind.Generate]: ({ labelledPrompt, aspectRatio, imageSize, includeThinking, history }) =>
-    geminiClient.generateImage({
+    });
+  },
+  [ChatRequestKind.Generate]: ({ labelledPrompt, aspectRatio, imageSize, includeThinking, history }) => {
+    const client = getClient();
+    return client.generateImage({
       prompt: labelledPrompt,
       aspectRatio,
       imageSize,
       includeThinking,
       history,
-    }),
+    });
+  },
 };
 
 const resolveRequestKind = (mode: ChatMode, hasUploads: boolean): ChatRequestKind => {
@@ -265,6 +279,17 @@ export function useChatSession(): UseChatSessionResult {
 
   const sendPrompt = useCallback(
     async (mode: ChatMode = 'generate') => {
+      const apiType = apiConfig.getType();
+      if (apiType === 'openai') {
+        if (mode === 'edit' || mode === 'search') {
+          dispatch({
+            type: 'appendMessage',
+            payload: toSystemMessage('OpenAI 兼容模式不支持此功能', true),
+          });
+          return;
+        }
+      }
+
       const trimmedPrompt = state.prompt.trim();
 
       if (!trimmedPrompt && mode !== 'edit') return;
@@ -286,14 +311,18 @@ export function useChatSession(): UseChatSessionResult {
       dispatch({ type: 'setPrompt', payload: '' });
       dispatch({ type: 'setLoading', payload: true });
 
+      // OpenAI 兼容模式下使用安全的默认值，避免不支持的参数影响请求
+      const aspectRatio = apiType === 'openai' ? ('1:1' as AspectRatio) : state.aspectRatio;
+      const imageSize = apiType === 'openai' ? ('1K' as ImageSize) : state.imageSize;
+
       const requestKind = resolveRequestKind(mode, imageDataList.length > 0);
       const requestContext: RequestContext = {
         promptText: trimmedPrompt,
         labelledPrompt: userText,
         imageDataList,
         history: state.history,
-        aspectRatio: state.aspectRatio,
-        imageSize: state.imageSize,
+        aspectRatio,
+        imageSize,
         includeThinking: state.includeThinking,
         lastImageData: state.lastImageData,
       };

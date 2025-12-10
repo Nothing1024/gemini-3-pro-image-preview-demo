@@ -10,7 +10,14 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { apiConfig } from '../utils/apiConfig';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { apiConfig, type ApiType, type ModelName } from '../utils/apiConfig';
 
 type SettingsDialogProps = {
   open: boolean;
@@ -20,12 +27,16 @@ type SettingsDialogProps = {
 export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
   const [url, setUrl] = useState('');
   const [apiKey, setApiKey] = useState('');
+  const [apiType, setApiType] = useState<ApiType>('gemini');
+  const [model, setModel] = useState<ModelName>(apiConfig.getModel());
   const [error, setError] = useState('');
 
   useEffect(() => {
     if (open) {
       setUrl(apiConfig.getUrl() || 'https://www.packyapi.com');
       setApiKey(apiConfig.getKey());
+      setApiType(apiConfig.getType());
+      setModel(apiConfig.getModel());
       setError('');
     }
   }, [open]);
@@ -41,6 +52,8 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
     }
     apiConfig.setUrl(url.trim());
     apiConfig.setKey(apiKey.trim());
+    apiConfig.setType(apiType);
+    apiConfig.setModel(model);
     onOpenChange(false);
   };
 
@@ -48,7 +61,16 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
     apiConfig.clear();
     setUrl('https://www.packyapi.com');
     setApiKey('');
+    setApiType('gemini');
+    setModel(apiConfig.getModel());
     setError('');
+  };
+
+  const getApiPathHint = () => {
+    if (apiType === 'gemini') {
+      return `${url || '{url}'}/v1beta/models/${model}:generateContent`;
+    }
+    return `${url || '{url}'}/v1/chat/completions`;
   };
 
   return (
@@ -67,6 +89,23 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
             <h3 className="text-sm font-medium text-muted-foreground">API 配置</h3>
             <div className="grid gap-4">
               <div className="space-y-2">
+                <Label htmlFor="api-type">API 类型</Label>
+                <Select value={apiType} onValueChange={(value: ApiType) => setApiType(value)}>
+                  <SelectTrigger id="api-type">
+                    <SelectValue placeholder="选择 API 类型" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="gemini">Gemini (原生格式)</SelectItem>
+                    <SelectItem value="openai">OpenAI 兼容格式</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  {apiType === 'gemini'
+                    ? '使用 Gemini 原生 API 格式，支持图片生成和编辑'
+                    : '使用 OpenAI 兼容 API 格式，适用于普通 Chat 对话'}
+                </p>
+              </div>
+              <div className="space-y-2">
                 <Label htmlFor="api-url">API URL</Label>
                 <Input
                   id="api-url"
@@ -75,7 +114,7 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
                   placeholder="https://www.packyapi.com"
                 />
                 <p className="text-xs text-muted-foreground">
-                  请求地址：{url || '{url}'}/v1beta/models/gemini-3-pro-image-preview:generateContent
+                  请求地址：{getApiPathHint()}
                 </p>
               </div>
               <div className="space-y-2">
@@ -88,12 +127,14 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
                   placeholder="输入您的 API Key"
                 />
                 <p className="text-xs text-muted-foreground">
-                  Key 将存储在本地，请确保环境安全
+                  {apiType === 'gemini'
+                    ? 'Key 将通过 x-goog-api-key 头部发送'
+                    : 'Key 将通过 Authorization: Bearer 头部发送'}
                 </p>
               </div>
             </div>
           </div>
-          
+
           {error && (
             <p className="mt-4 text-sm text-destructive">{error}</p>
           )}

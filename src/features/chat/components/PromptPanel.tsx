@@ -7,6 +7,7 @@ import { ControlBar } from './ControlBar'
 import type { UploadItem, ChatMode, AspectRatio, ImageSize } from '@/features/chat/types'
 import { extractFilesFromDataTransfer } from '../utils/files'
 import { cn } from '@/lib/utils'
+import { apiConfig, type ModelName } from '@/features/chat/utils/apiConfig'
 
 type PromptPanelProps = {
   prompt: string
@@ -18,9 +19,11 @@ type PromptPanelProps = {
   onRemoveUpload: (id: string) => void
   aspectRatio: AspectRatio
   imageSize: ImageSize
+  model: ModelName
   includeThinking: boolean
   onAspectChange: (value: AspectRatio) => void
   onSizeChange: (value: ImageSize) => void
+  onModelChange: (model: ModelName) => void
   onToggleThinking: (value: boolean) => void
   canEditLast: boolean
   onEditLast: () => void
@@ -36,9 +39,11 @@ export function PromptPanel({
   onRemoveUpload,
   aspectRatio,
   imageSize,
+  model,
   includeThinking,
   onAspectChange,
   onSizeChange,
+  onModelChange,
   onToggleThinking,
   canEditLast,
   onEditLast,
@@ -47,6 +52,7 @@ export function PromptPanel({
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const [isDragging, setIsDragging] = useState(false)
   const [showControls, setShowControls] = useState(false)
+  const apiType = apiConfig.getType()
 
   const handleIncomingFiles = async (files?: FileList | File[]) => {
     if (files && files.length > 0) {
@@ -147,11 +153,13 @@ export function PromptPanel({
            )}>
               <div className="bg-muted/40 rounded-xl p-1.5 mx-1 border border-border/20">
                  <ControlBar
-                  aspectRatio={aspectRatio}
-                  imageSize={imageSize}
+                 aspectRatio={aspectRatio}
+                 imageSize={imageSize}
+                  model={model}
                   includeThinking={includeThinking}
                   onAspectChange={onAspectChange}
                   onSizeChange={onSizeChange}
+                  onModelChange={onModelChange}
                   onToggleThinking={onToggleThinking}
                   onEdit={onEditLast}
                   canEdit={canEditLast}
@@ -191,26 +199,30 @@ export function PromptPanel({
             </div>
 
             <div className="flex items-center gap-1.5">
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 rounded-full text-muted-foreground hover:bg-muted hover:text-foreground transition-all duration-200"
-                onClick={() => onEditLast()}
-                disabled={loading || !canEditLast}
-                title="编辑上一张"
-              >
-                <Edit className="h-4 w-4" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 rounded-full text-muted-foreground hover:bg-muted hover:text-foreground transition-all duration-200"
-                onClick={() => onSend("search")}
-                disabled={loading}
-                title="联网生成"
-              >
-                <Search className="h-4 w-4" />
-              </Button>
+              {apiType === "gemini" && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 rounded-full text-muted-foreground hover:bg-muted hover:text-foreground transition-all duration-200"
+                  onClick={() => onEditLast()}
+                  disabled={loading || !canEditLast}
+                  title="编辑上一张"
+                >
+                  <Edit className="h-4 w-4" />
+                </Button>
+              )}
+              {apiType === "gemini" && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 rounded-full text-muted-foreground hover:bg-muted hover:text-foreground transition-all duration-200"
+                  onClick={() => onSend("search")}
+                  disabled={loading}
+                  title="联网生成"
+                >
+                  <Search className="h-4 w-4" />
+                </Button>
+              )}
               <Button
                 onClick={() => onSend("generate")}
                 disabled={loading || (!prompt && uploads.length === 0)}
