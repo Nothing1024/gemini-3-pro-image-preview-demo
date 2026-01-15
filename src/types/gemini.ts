@@ -54,9 +54,9 @@ export type GeminiInlineDataInput = {
 
 export type GeminiResult = {
   text: string;
-  parts: Array<{ text: string; thought?: boolean }>;
+  parts: Array<{ text: string }>;
   imageData: string | null;
-  thinkingImages: string[];
+  thinkingImages: string[]; // 保留字段兼容性，始终为空数组
   groundingMetadata?: unknown;
   history: GeminiMessage[];
 };

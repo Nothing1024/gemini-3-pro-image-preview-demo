@@ -36,7 +36,6 @@ function App() {
         <div className="flex-1 flex flex-col min-w-0 relative pb-[calc(var(--prompt-panel-height,160px)+16px)]">
           <MessageList
             messages={state.messages}
-            includeThinking={state.includeThinking}
             onDownload={actions.downloadImage}
             onDeleteMessage={actions.deleteMessage}
             hasSavedConversation={state.hasSavedConversation}
@@ -64,12 +63,10 @@ function App() {
         aspectRatio={state.aspectRatio}
         imageSize={state.imageSize}
         model={model}
-        includeThinking={state.includeThinking}
         forceImageGuidance={state.forceImageGuidance}
         onAspectChange={actions.setAspectRatio}
         onSizeChange={actions.setImageSize}
         onModelChange={handleModelChange}
-        onToggleThinking={actions.setIncludeThinking}
         onToggleForceImageGuidance={actions.setForceImageGuidance}
         canEditLast={!!state.lastImageData}
         onEditLast={() => actions.sendPrompt('edit')}

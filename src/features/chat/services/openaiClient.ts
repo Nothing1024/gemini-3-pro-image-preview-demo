@@ -89,7 +89,7 @@ const convertHistoryToOpenAI = (history: GeminiMessage[] = []): OpenAIMessage[] 
       .map((p) => p.text as string);
 
     const imageParts = msg.parts
-      .filter((p) => p.inline_data || p.inlineData)
+      .filter((p) => !p.thought && (p.inline_data || p.inlineData))
       .map((p) => {
         const inlineData = p.inline_data || p.inlineData;
         return inlineData ? `data:${inlineData.mime_type};base64,${inlineData.data}` : '';

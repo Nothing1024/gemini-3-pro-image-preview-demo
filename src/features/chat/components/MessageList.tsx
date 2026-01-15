@@ -6,7 +6,6 @@ import type { ChatMessage } from '@/features/chat/types'
 
 type MessageListProps = {
   messages: ChatMessage[]
-  includeThinking: boolean
   onDownload: (base64: string) => void
   onDeleteMessage: (id: string) => void
   hasSavedConversation: boolean
@@ -17,7 +16,6 @@ type MessageListProps = {
 
 export function MessageList({
   messages,
-  includeThinking,
   onDownload,
   onDeleteMessage,
   hasSavedConversation,
@@ -75,7 +73,6 @@ export function MessageList({
             <MessageItem
               key={message.id}
               message={message}
-              includeThinking={includeThinking}
               onDownload={onDownload}
               onDelete={onDeleteMessage}
             />

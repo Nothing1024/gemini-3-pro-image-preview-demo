@@ -1,4 +1,4 @@
-import { RotateCcw, Settings, Loader2 } from 'lucide-react'
+import { RotateCcw, Settings, Loader2, Github } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 
@@ -24,6 +24,16 @@ export function ChatHeader({ loading, onReset, onOpenSettings }: ChatHeaderProps
         )}
       </div>
       <div className="flex items-center gap-1 md:gap-2 text-sm text-muted-foreground">
+        <a
+          href="https://github.com/Nothing1024/gemini-3-pro-image-preview-demo"
+          target="_blank"
+          rel="noopener noreferrer"
+          title="GitHub"
+        >
+          <Button variant="ghost" size="icon" className="h-8 w-8 md:h-9 md:w-9" asChild>
+            <span><Github className="h-4 w-4" /></span>
+          </Button>
+        </a>
         {onOpenSettings && (
           <Button variant="ghost" size="icon" onClick={onOpenSettings} title="设置" className="h-8 w-8 md:h-9 md:w-9">
             <Settings className="h-4 w-4" />

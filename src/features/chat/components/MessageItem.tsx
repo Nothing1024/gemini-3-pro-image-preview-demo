@@ -34,11 +34,9 @@ const markdownComponents: Components = {
   },
 }
 
-function getDisplayParts(message: ChatMessage, includeThinking: boolean) {
+function getDisplayParts(message: ChatMessage) {
   if (message.parts && message.parts.length > 0) {
-    const nonThoughtParts = message.parts.filter((p) => !p.thought)
-    const combined = includeThinking ? message.parts : nonThoughtParts
-    return combined
+    return message.parts
   }
   if (message.text) return [{ text: message.text }]
   return []
@@ -82,12 +80,11 @@ function UploadedThumb({ src, alt }: { src: string; alt: string }) {
 
 type MessageItemProps = {
   message: ChatMessage
-  includeThinking: boolean
   onDownload: (base64: string) => void
   onDelete: (id: string) => void
 }
 
-export function MessageItem({ message, includeThinking, onDownload, onDelete }: MessageItemProps) {
+export function MessageItem({ message, onDownload, onDelete }: MessageItemProps) {
   const isUser = message.role === 'user'
   const [copied, setCopied] = useState(false)
   const [lightboxOpen, setLightboxOpen] = useState(false)
@@ -97,7 +94,7 @@ export function MessageItem({ message, includeThinking, onDownload, onDelete }: 
     const copyText = isUser
       ? buildUserMarkdown(message)
       : (() => {
-          const displayParts = getDisplayParts(message, includeThinking)
+          const displayParts = getDisplayParts(message)
           const hasStructured = Boolean(message.parts?.length)
           return hasStructured
             ? displayParts.map((p) => p.text).filter(Boolean).join('\n\n')
@@ -112,7 +109,7 @@ export function MessageItem({ message, includeThinking, onDownload, onDelete }: 
 
   const handleDelete = () => onDelete(message.id)
 
-  const displayParts = getDisplayParts(message, includeThinking)
+  const displayParts = getDisplayParts(message)
 
   return (
     <div className={cn("flex flex-col gap-1 w-full max-w-4xl mx-auto animate-in fade-in slide-in-from-bottom-2 duration-300", isUser ? "items-end" : "items-start")}>
@@ -197,28 +194,6 @@ export function MessageItem({ message, includeThinking, onDownload, onDelete }: 
             {message.images.map((img, i) => (
               <UploadedThumb key={i} src={img} alt="uploaded" />
             ))}
-          </div>
-        )}
-
-        {/* 思考过程 (可折叠) */}
-        {message.thinkingImages && message.thinkingImages.length > 0 && (
-          <div className="mt-4 border-t pt-3">
-            <details className="group/thinking">
-              <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground flex items-center gap-2 select-none">
-                <span className="bg-muted px-2 py-0.5 rounded-full">🧠 思考过程</span>
-                <span className="opacity-0 group-hover/thinking:opacity-100 transition-opacity text-[10px]">点击展开 {message.thinkingImages.length} 帧</span>
-              </summary>
-              <div className="flex overflow-x-auto gap-2 py-2 mt-2 pb-4 custom-scrollbar">
-                {message.thinkingImages.map((img, i) => (
-                  <img
-                    key={i}
-                    src={`data:image/png;base64,${img}`}
-                    className="h-32 w-auto rounded-lg border shadow-sm flex-shrink-0"
-                    alt={`thinking-${i}`}
-                  />
-                ))}
-              </div>
-            </details>
           </div>
         )}
 

@@ -18,10 +18,9 @@ export interface ChatMessage {
   id: string
   role: ChatRole
   text: string
-  parts?: Array<{ text: string; thought?: boolean }>
+  parts?: Array<{ text: string }>
   images?: string[]           // 用户上传的参考图
   imageData?: string          // AI生成的图片 (base64)
-  thinkingImages?: string[]   // 思考过程帧 (base64)
   isError?: boolean
   timestamp: string
 }

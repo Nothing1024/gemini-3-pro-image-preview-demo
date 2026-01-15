@@ -20,12 +20,10 @@ type PromptPanelProps = {
   aspectRatio: AspectRatio
   imageSize: ImageSize
   model: ModelName
-  includeThinking: boolean
   forceImageGuidance: boolean
   onAspectChange: (value: AspectRatio) => void
   onSizeChange: (value: ImageSize) => void
   onModelChange: (model: ModelName) => void
-  onToggleThinking: (value: boolean) => void
   onToggleForceImageGuidance: (value: boolean) => void
   canEditLast: boolean
   onEditLast: () => void
@@ -42,12 +40,10 @@ export function PromptPanel({
   aspectRatio,
   imageSize,
   model,
-  includeThinking,
   forceImageGuidance,
   onAspectChange,
   onSizeChange,
   onModelChange,
-  onToggleThinking,
   onToggleForceImageGuidance,
   canEditLast,
   onEditLast,
@@ -194,12 +190,10 @@ export function PromptPanel({
                  aspectRatio={aspectRatio}
                  imageSize={imageSize}
                  model={model}
-                  includeThinking={includeThinking}
                   forceImageGuidance={forceImageGuidance}
                   onAspectChange={onAspectChange}
                   onSizeChange={onSizeChange}
                   onModelChange={onModelChange}
-                  onToggleThinking={onToggleThinking}
                   onToggleForceImageGuidance={onToggleForceImageGuidance}
                   onEdit={onEditLast}
                   canEdit={canEditLast}

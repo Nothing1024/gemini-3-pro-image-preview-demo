@@ -35,7 +35,6 @@ type GeminiCallParams = {
   images?: GeminiInlineDataInput[];
   aspectRatio?: string;
   imageSize?: string;
-  includeThinking?: boolean;
   useSearch?: boolean;
 };
 
@@ -47,17 +46,29 @@ const getModelPath = (): string => {
 };
 
 const cloneHistory = (history: GeminiMessage[] = []): GeminiMessage[] =>
-  history.map((message) => ({
-    role: message.role,
-    parts: message.parts.map((part) => {
-      const inlineData = part.inline_data || part.inlineData;
-      return {
-        ...(part.text ? { text: part.text } : {}),
-        ...(inlineData ? { inline_data: inlineData } : {}),
-        ...(part.thought ? { thought: part.thought } : {}),
-      };
-    }),
-  }));
+  history
+    .map((message) => ({
+      role: message.role,
+      parts: message.parts
+        .filter((part) => {
+          // 过滤掉所有 thought 内容
+          if (part.thought) return false;
+          // 对于模型消息，过滤掉所有图片（避免 thought_signature 问题）
+          if (message.role === 'model') {
+            const hasImage = part.inline_data || part.inlineData;
+            if (hasImage) return false;
+          }
+          return true;
+        })
+        .map((part) => {
+          const inlineData = part.inline_data || part.inlineData;
+          return {
+            ...(part.text ? { text: part.text } : {}),
+            ...(inlineData ? { inline_data: inlineData } : {}),
+          };
+        }),
+    }))
+    .filter((message) => message.parts.length > 0);
 
 const buildUserMessage = (prompt: string, images: GeminiInlineDataInput[] = []): GeminiMessage => {
   const parts: GeminiContentPart[] = [{ text: prompt }];
@@ -96,51 +107,29 @@ const extractImageData = (response: GeminiResponse): string | null => {
   return null;
 };
 
-const extractThinkingImages = (response: GeminiResponse): string[] => {
-  const thinkingImages: string[] = [];
-  const parts = response.candidates?.[0]?.content?.parts || [];
-  parts.forEach((part) => {
-    if (!part.thought) return;
-    const inlineData = getInlineData(part);
-    if (inlineData?.data) {
-      thinkingImages.push(inlineData.data);
-    }
-  });
-  return thinkingImages;
-};
-
 const buildAssistantMessageParts = (
-  response: GeminiResponse,
-  includeThinking: boolean
-): { parts: GeminiContentPart[]; thinkingImages: string[]; textParts: Array<{ text: string; thought?: boolean }> } => {
+  response: GeminiResponse
+): { parts: GeminiContentPart[]; textParts: Array<{ text: string }> } => {
   const parts: GeminiContentPart[] = [];
-  const textParts: Array<{ text: string; thought?: boolean }> = [];
-  const thinkingImages = includeThinking ? extractThinkingImages(response) : [];
-
-  thinkingImages.forEach((image) => {
-    parts.push({
-      inline_data: { mime_type: 'image/png', data: image },
-      thought: true,
-    });
-  });
+  const textParts: Array<{ text: string }> = [];
 
   const candidateParts = response.candidates?.[0]?.content?.parts || [];
   candidateParts.forEach((part) => {
-    const thought = part.thought ? true : undefined;
+    if (part.thought) return; // 跳过思考过程内容
 
     if (part.text) {
-      const textPart = { text: part.text, ...(thought ? { thought } : {}) };
+      const textPart = { text: part.text };
       parts.push(textPart);
       textParts.push(textPart);
       return;
     }
     const inlineData = getInlineData(part);
     if (inlineData) {
-      parts.push({ inline_data: inlineData, ...(thought ? { thought } : {}) });
+      parts.push({ inline_data: inlineData });
     }
   });
 
-  return { parts, thinkingImages, textParts };
+  return { parts, textParts };
 };
 
 const toGeminiError = (status: number, body: unknown): GeminiClientError => {
@@ -211,7 +200,6 @@ const callGeminiApi = async ({
   history = [],
   aspectRatio = '1:1',
   imageSize = '2K',
-  includeThinking = false,
   useSearch = false,
 }: GeminiCallParams): Promise<GeminiResult> => {
   const baseUrl = apiConfig.getUrl();
@@ -241,7 +229,7 @@ const callGeminiApi = async ({
   }
 
   const response = await requestGemini(payload, apiKey, baseUrl);
-  const { parts, thinkingImages, textParts } = buildAssistantMessageParts(response, includeThinking);
+  const { parts, textParts } = buildAssistantMessageParts(response);
 
   const updatedHistory: GeminiMessage[] =
     parts.length > 0 ? [...contents, { role: 'model', parts }] : contents;
@@ -250,7 +238,7 @@ const callGeminiApi = async ({
     text: extractText(response),
     parts: textParts,
     imageData: extractImageData(response),
-    thinkingImages,
+    thinkingImages: [],
     groundingMetadata: response.groundingMetadata,
     history: updatedHistory,
   };
@@ -261,17 +249,15 @@ export const geminiClient = {
     prompt,
     aspectRatio,
     imageSize,
-    includeThinking,
     history,
   }: Omit<GeminiCallParams, 'images' | 'useSearch'>) =>
-    callGeminiApi({ prompt, aspectRatio, imageSize, includeThinking, history }),
+    callGeminiApi({ prompt, aspectRatio, imageSize, history }),
 
   editImage: ({
     imageData,
     editPrompt,
     aspectRatio,
     imageSize,
-    includeThinking,
     history,
   }: {
     imageData: string;
@@ -282,7 +268,6 @@ export const geminiClient = {
       images: [{ data: imageData, mimeType: 'image/png' }],
       aspectRatio,
       imageSize,
-      includeThinking,
       history,
     }),
 
@@ -291,7 +276,6 @@ export const geminiClient = {
     imageDataList,
     aspectRatio,
     imageSize,
-    includeThinking,
     history,
   }: {
     prompt: string;
@@ -302,7 +286,6 @@ export const geminiClient = {
       images: imageDataList,
       aspectRatio,
       imageSize,
-      includeThinking,
       history,
     }),
 
@@ -310,14 +293,12 @@ export const geminiClient = {
     prompt,
     aspectRatio,
     imageSize,
-    includeThinking,
     history,
   }: Omit<GeminiCallParams, 'images' | 'useSearch'>) =>
     callGeminiApi({
       prompt,
       aspectRatio,
       imageSize,
-      includeThinking,
       history,
       useSearch: true,
     }),

@@ -19,21 +19,8 @@ enum ChatRequestKind {
   Generate = 'GENERATE',
 }
 
-const INCLUDE_THINKING_STORAGE_KEY = 'gemini_include_thinking';
 const FORCE_IMAGE_GUIDANCE_STORAGE_KEY = 'gemini_force_image_guidance';
 const CHAT_PERSIST_STORAGE_KEY = 'gemini_chat_persist_v1';
-
-const readIncludeThinking = (): boolean => {
-  if (typeof window === 'undefined') return false;
-
-  try {
-    const stored = window.localStorage?.getItem(INCLUDE_THINKING_STORAGE_KEY);
-    return stored === 'true';
-  } catch (error) {
-    console.warn('无法从 localStorage 读取 includeThinking 状态：', error);
-    return false;
-  }
-};
 
 const readForceImageGuidance = (): boolean => {
   if (typeof window === 'undefined') return false;
@@ -44,16 +31,6 @@ const readForceImageGuidance = (): boolean => {
   } catch (error) {
     console.warn('无法从 localStorage 读取 forceImageGuidance 状态：', error);
     return false;
-  }
-};
-
-const writeIncludeThinking = (value: boolean): void => {
-  if (typeof window === 'undefined') return;
-
-  try {
-    window.localStorage?.setItem(INCLUDE_THINKING_STORAGE_KEY, String(value));
-  } catch (error) {
-    console.warn('无法写入 includeThinking 状态到 localStorage：', error);
   }
 };
 
@@ -74,7 +51,6 @@ export type ChatState = {
   prompt: string;
   aspectRatio: AspectRatio;
   imageSize: ImageSize;
-  includeThinking: boolean;
   forceImageGuidance: boolean;
   hasSavedConversation: boolean;
   savedConversationAt: string | null;
@@ -90,7 +66,6 @@ type PersistedChatPayload = {
   prompt: string;
   aspectRatio: AspectRatio;
   imageSize: ImageSize;
-  includeThinking: boolean;
   forceImageGuidance: boolean;
   lastImageData: string | null;
 };
@@ -133,7 +108,6 @@ const slimPersistPayload = (payload: PersistedChatPayload): PersistedChatPayload
     ...m,
     images: undefined,
     imageData: undefined,
-    thinkingImages: undefined,
   }));
 
   const slimHistory = payload.history.map((msg) => ({
@@ -241,7 +215,6 @@ type ChatAction =
   | { type: 'setPrompt'; payload: string }
   | { type: 'setAspectRatio'; payload: AspectRatio }
   | { type: 'setImageSize'; payload: ImageSize }
-  | { type: 'setIncludeThinking'; payload: boolean }
   | { type: 'setForceImageGuidance'; payload: boolean }
   | { type: 'setSavedConversationMeta'; payload: { hasSavedConversation: boolean; savedConversationAt: string | null } }
   | { type: 'restoreSavedConversation'; payload: { savedAt: string; payload: PersistedChatPayload } }
@@ -262,7 +235,6 @@ const createInitialState = (): ChatState => ({
   prompt: '',
   aspectRatio: '1:1',
   imageSize: '2K',
-  includeThinking: readIncludeThinking(),
   forceImageGuidance: readForceImageGuidance(),
   ...readSavedConversationMeta(),
   uploadedImages: [],
@@ -278,8 +250,6 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
       return { ...state, aspectRatio: action.payload };
     case 'setImageSize':
       return { ...state, imageSize: action.payload };
-    case 'setIncludeThinking':
-      return { ...state, includeThinking: action.payload };
     case 'setForceImageGuidance':
       return { ...state, forceImageGuidance: action.payload };
     case 'setSavedConversationMeta':
@@ -298,7 +268,6 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
         prompt: payload.prompt || '',
         aspectRatio: payload.aspectRatio || '1:1',
         imageSize: payload.imageSize || '2K',
-        includeThinking: payload.includeThinking ?? state.includeThinking,
         forceImageGuidance: payload.forceImageGuidance ?? state.forceImageGuidance,
         uploadedImages: [],
         lastImageData: payload.lastImageData || resolveLastImageData(payload.messages || []),
@@ -367,7 +336,6 @@ const toAssistantMessage = (response: GeminiResult): ChatMessage => ({
   text: response.text,
   parts: response.parts?.length ? response.parts : undefined,
   imageData: response.imageData ?? undefined,
-  thinkingImages: response.thinkingImages.length ? response.thinkingImages : undefined,
   timestamp: now(),
 });
 
@@ -378,7 +346,6 @@ type RequestContext = {
   history: GeminiMessage[];
   aspectRatio: AspectRatio;
   imageSize: ImageSize;
-  includeThinking: boolean;
   lastImageData: string | null;
 };
 
@@ -388,7 +355,7 @@ const getClient = () => {
 };
 
 const requestHandlers: Record<ChatRequestKind, (ctx: RequestContext) => Promise<GeminiResult>> = {
-  [ChatRequestKind.Edit]: ({ lastImageData, promptText, aspectRatio, imageSize, includeThinking, history }) => {
+  [ChatRequestKind.Edit]: ({ lastImageData, promptText, aspectRatio, imageSize, history }) => {
     if (!lastImageData) {
       return Promise.reject(new Error('没有可编辑的图片'));
     }
@@ -398,38 +365,34 @@ const requestHandlers: Record<ChatRequestKind, (ctx: RequestContext) => Promise<
       editPrompt: promptText,
       aspectRatio,
       imageSize,
-      includeThinking,
       history,
     });
   },
-  [ChatRequestKind.Composite]: ({ labelledPrompt, imageDataList, aspectRatio, imageSize, includeThinking, history }) => {
+  [ChatRequestKind.Composite]: ({ labelledPrompt, imageDataList, aspectRatio, imageSize, history }) => {
     const client = getClient();
     return client.compositeImages({
       prompt: labelledPrompt,
       imageDataList,
       aspectRatio,
       imageSize,
-      includeThinking,
       history,
     });
   },
-  [ChatRequestKind.Search]: ({ promptText, aspectRatio, imageSize, includeThinking, history }) => {
+  [ChatRequestKind.Search]: ({ promptText, aspectRatio, imageSize, history }) => {
     const client = getClient();
     return client.generateWithSearch({
       prompt: promptText,
       aspectRatio,
       imageSize,
-      includeThinking,
       history,
     });
   },
-  [ChatRequestKind.Generate]: ({ labelledPrompt, aspectRatio, imageSize, includeThinking, history }) => {
+  [ChatRequestKind.Generate]: ({ labelledPrompt, aspectRatio, imageSize, history }) => {
     const client = getClient();
     return client.generateImage({
       prompt: labelledPrompt,
       aspectRatio,
       imageSize,
-      includeThinking,
       history,
     });
   },
@@ -452,7 +415,6 @@ export type ChatActions = {
   setPrompt: (value: string) => void;
   setAspectRatio: (value: AspectRatio) => void;
   setImageSize: (value: ImageSize) => void;
-  setIncludeThinking: (value: boolean) => void;
   setForceImageGuidance: (value: boolean) => void;
   addUploads: (files?: FileList | File[] | null) => Promise<void>;
   removeUpload: (id: string) => void;
@@ -514,7 +476,6 @@ export function useChatSession(): UseChatSessionResult {
       prompt: state.prompt,
       aspectRatio: state.aspectRatio,
       imageSize: state.imageSize,
-      includeThinking: state.includeThinking,
       forceImageGuidance: state.forceImageGuidance,
       lastImageData: state.lastImageData,
     };
@@ -533,7 +494,6 @@ export function useChatSession(): UseChatSessionResult {
     state.prompt,
     state.aspectRatio,
     state.imageSize,
-    state.includeThinking,
     state.forceImageGuidance,
     state.lastImageData,
   ]);
@@ -620,7 +580,6 @@ export function useChatSession(): UseChatSessionResult {
         history: state.history,
         aspectRatio,
         imageSize,
-        includeThinking: state.includeThinking,
         lastImageData: state.lastImageData,
       };
 
@@ -646,7 +605,6 @@ export function useChatSession(): UseChatSessionResult {
       state.history,
       state.aspectRatio,
       state.imageSize,
-      state.includeThinking,
       state.forceImageGuidance,
       state.lastImageData,
     ]
@@ -658,10 +616,6 @@ export function useChatSession(): UseChatSessionResult {
       setPrompt: (value: string) => dispatch({ type: 'setPrompt', payload: value }),
       setAspectRatio: (value: AspectRatio) => dispatch({ type: 'setAspectRatio', payload: value }),
       setImageSize: (value: ImageSize) => dispatch({ type: 'setImageSize', payload: value }),
-      setIncludeThinking: (value: boolean) => {
-        writeIncludeThinking(value);
-        dispatch({ type: 'setIncludeThinking', payload: value });
-      },
       setForceImageGuidance: (value: boolean) => {
         writeForceImageGuidance(value);
         dispatch({ type: 'setForceImageGuidance', payload: value });
@@ -675,7 +629,6 @@ export function useChatSession(): UseChatSessionResult {
           dispatch({ type: 'appendMessage', payload: toSystemMessage('没有找到可加载的历史对话', true) });
           return;
         }
-        writeIncludeThinking(saved.payload.includeThinking);
         writeForceImageGuidance(saved.payload.forceImageGuidance);
         dispatch({ type: 'restoreSavedConversation', payload: { savedAt: saved.savedAt, payload: saved.payload } });
       },

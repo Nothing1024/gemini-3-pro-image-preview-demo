@@ -1,4 +1,4 @@
-import { Edit, Monitor, Ratio, Brain, Bot, Sparkles } from "lucide-react"
+import { Edit, Monitor, Ratio, Bot, Sparkles } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -10,12 +10,10 @@ type ControlBarProps = {
   aspectRatio: AspectRatio
   imageSize: ImageSize
   model: ModelName
-  includeThinking: boolean
   forceImageGuidance: boolean
   onAspectChange: (value: AspectRatio) => void
   onSizeChange: (value: ImageSize) => void
   onModelChange: (model: ModelName) => void
-  onToggleThinking: (value: boolean) => void
   onToggleForceImageGuidance: (value: boolean) => void
   onEdit: () => void
   canEdit: boolean
@@ -26,12 +24,10 @@ export function ControlBar({
   aspectRatio,
   imageSize,
   model,
-  includeThinking,
   forceImageGuidance,
   onAspectChange,
   onSizeChange,
   onModelChange,
-  onToggleThinking,
   onToggleForceImageGuidance,
   onEdit,
   canEdit,
@@ -107,20 +103,6 @@ export function ControlBar({
           </Select>
         </div>
       )}
-
-      {/* 思考过程开关 */}
-      <div className="flex items-center gap-2">
-        <Brain className="h-4 w-4" />
-        <div className="flex items-center gap-2 cursor-pointer" onClick={() => onToggleThinking(!includeThinking)}>
-          <span className="text-xs">思考过程</span>
-          <Switch
-            id="thinking"
-            checked={includeThinking}
-            onCheckedChange={onToggleThinking}
-            className="scale-75 origin-left"
-          />
-        </div>
-      </div>
 
       {/* 强制出图引导开关 */}
       <div className="flex items-center gap-2">
