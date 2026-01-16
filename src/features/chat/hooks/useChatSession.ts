@@ -4,7 +4,7 @@ import { openaiClient } from '../services/openaiClient';
 import { apiConfig } from '../utils/apiConfig';
 import { createSessionId } from '../utils/session';
 import { limitUploads, toUploadItems } from '../utils/files';
-import type { UploadItem, ChatMessage, ChatMode, AspectRatio, ImageSize } from '../types';
+import type { UploadItem, ChatMessage, ChatMode, AspectRatio, ImageSize, RetryContext } from '../types';
 import type { GeminiContentPart, GeminiInlineDataInput, GeminiMessage, GeminiResult } from '@/types/gemini';
 
 const messageId = (): string =>
@@ -314,11 +314,12 @@ const buildUserLabel = (mode: ChatMode, text: string): string => {
   return text;
 };
 
-const toSystemMessage = (text: string, isError = false): ChatMessage => ({
+const toSystemMessage = (text: string, isError = false, retryContext?: RetryContext): ChatMessage => ({
   id: messageId(),
   role: 'system',
   text,
   isError,
+  retryContext,
   timestamp: now(),
 });
 
@@ -330,12 +331,13 @@ const toUserMessage = (text: string, images: string[]): ChatMessage => ({
   timestamp: now(),
 });
 
-const toAssistantMessage = (response: GeminiResult): ChatMessage => ({
+const toAssistantMessage = (response: GeminiResult, retryContext?: RetryContext): ChatMessage => ({
   id: messageId(),
   role: 'assistant',
   text: response.text,
   parts: response.parts?.length ? response.parts : undefined,
   imageData: response.imageData ?? undefined,
+  retryContext,
   timestamp: now(),
 });
 
@@ -422,6 +424,7 @@ export type ChatActions = {
   restoreSavedConversation: () => void;
   clearSavedConversation: () => void;
   sendPrompt: (mode?: ChatMode) => Promise<void>;
+  retryRequest: (ctx: RetryContext, errorMessageId: string) => Promise<void>;
   reset: () => Promise<void>;
   downloadImage: (base64: string) => void;
 };
@@ -448,6 +451,7 @@ const applyForceImageGuidance = (prompt: string): string => {
 export function useChatSession(): UseChatSessionResult {
   const [state, dispatch] = useReducer(chatReducer, undefined, createInitialState);
   const didPersistRef = useRef(false);
+  const isSubmittingRef = useRef(false);
 
   useEffect(() => {
     if (!didPersistRef.current) {
@@ -535,6 +539,10 @@ export function useChatSession(): UseChatSessionResult {
 
   const sendPrompt = useCallback(
     async (mode: ChatMode = 'generate') => {
+      // 防止重复提交
+      if (isSubmittingRef.current || state.loading) return;
+      isSubmittingRef.current = true;
+
       const apiType = apiConfig.getType();
       if (apiType === 'openai') {
         if (mode === 'edit' || mode === 'search') {
@@ -542,6 +550,7 @@ export function useChatSession(): UseChatSessionResult {
             type: 'appendMessage',
             payload: toSystemMessage('OpenAI 兼容模式不支持此功能', true),
           });
+          isSubmittingRef.current = false;
           return;
         }
       }
@@ -549,9 +558,13 @@ export function useChatSession(): UseChatSessionResult {
       const trimmedPrompt = state.prompt.trim();
       const promptText = state.forceImageGuidance ? applyForceImageGuidance(trimmedPrompt) : trimmedPrompt;
 
-      if (!trimmedPrompt && mode !== 'edit') return;
+      if (!trimmedPrompt && mode !== 'edit') {
+        isSubmittingRef.current = false;
+        return;
+      }
       if (mode === 'edit' && !state.lastImageData) {
         dispatch({ type: 'appendMessage', payload: toSystemMessage('没有可编辑的图片', true) });
+        isSubmittingRef.current = false;
         return;
       }
 
@@ -560,6 +573,14 @@ export function useChatSession(): UseChatSessionResult {
         data: base64,
         mimeType,
       }));
+
+      // 保存重试上下文
+      const retryCtx: RetryContext = {
+        mode,
+        prompt: trimmedPrompt,
+        uploadDataUrls: state.uploadedImages.map((img) => img.dataUrl),
+        uploadItems: state.uploadedImages.map(({ base64, mimeType }) => ({ base64, mimeType })),
+      };
 
       const userMessage = toUserMessage(userText, state.uploadedImages.map((img) => img.dataUrl));
 
@@ -585,7 +606,7 @@ export function useChatSession(): UseChatSessionResult {
 
       try {
         const response = await requestHandlers[requestKind](requestContext);
-        const assistantMessage = toAssistantMessage(response);
+        const assistantMessage = toAssistantMessage(response, retryCtx);
 
         dispatch({ type: 'appendMessage', payload: assistantMessage });
         dispatch({ type: 'setHistory', payload: response.history });
@@ -594,14 +615,95 @@ export function useChatSession(): UseChatSessionResult {
         }
       } catch (error) {
         const message = error instanceof Error ? error.message : '未知错误';
-        dispatch({ type: 'appendMessage', payload: toSystemMessage(`错误：${message}`, true) });
+        dispatch({ type: 'appendMessage', payload: toSystemMessage(`错误：${message}`, true, retryCtx) });
       } finally {
         dispatch({ type: 'setLoading', payload: false });
+        isSubmittingRef.current = false;
       }
     },
     [
+      state.loading,
       state.prompt,
       state.uploadedImages,
+      state.history,
+      state.aspectRatio,
+      state.imageSize,
+      state.forceImageGuidance,
+      state.lastImageData,
+    ]
+  );
+
+  const retryRequest = useCallback(
+    async (ctx: RetryContext, errorMessageId: string) => {
+      // 防止重复提交
+      if (isSubmittingRef.current || state.loading) return;
+      isSubmittingRef.current = true;
+
+      const apiType = apiConfig.getType();
+      if (apiType === 'openai') {
+        if (ctx.mode === 'edit' || ctx.mode === 'search') {
+          dispatch({
+            type: 'appendMessage',
+            payload: toSystemMessage('OpenAI 兼容模式不支持此功能', true),
+          });
+          isSubmittingRef.current = false;
+          return;
+        }
+      }
+
+      // 删除旧的错误消息
+      dispatch({ type: 'deleteMessage', payload: errorMessageId });
+
+      const promptText = state.forceImageGuidance ? applyForceImageGuidance(ctx.prompt) : ctx.prompt;
+      const userText = buildUserLabel(ctx.mode, promptText);
+      const imageDataList: GeminiInlineDataInput[] = ctx.uploadItems.map(({ base64, mimeType }) => ({
+        data: base64,
+        mimeType,
+      }));
+
+      // 保存新的重试上下文
+      const retryCtx: RetryContext = {
+        mode: ctx.mode,
+        prompt: ctx.prompt,
+        uploadDataUrls: ctx.uploadDataUrls,
+        uploadItems: ctx.uploadItems,
+      };
+
+      dispatch({ type: 'setLoading', payload: true });
+
+      const aspectRatio = apiType === 'openai' ? ('1:1' as AspectRatio) : state.aspectRatio;
+      const imageSize = apiType === 'openai' ? ('1K' as ImageSize) : state.imageSize;
+
+      const requestKind = resolveRequestKind(ctx.mode, imageDataList.length > 0);
+      const requestContext: RequestContext = {
+        promptText,
+        labelledPrompt: userText,
+        imageDataList,
+        history: state.history,
+        aspectRatio,
+        imageSize,
+        lastImageData: state.lastImageData,
+      };
+
+      try {
+        const response = await requestHandlers[requestKind](requestContext);
+        const assistantMessage = toAssistantMessage(response, retryCtx);
+
+        dispatch({ type: 'appendMessage', payload: assistantMessage });
+        dispatch({ type: 'setHistory', payload: response.history });
+        if (response.imageData) {
+          dispatch({ type: 'setLastImage', payload: response.imageData });
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : '未知错误';
+        dispatch({ type: 'appendMessage', payload: toSystemMessage(`错误：${message}`, true, retryCtx) });
+      } finally {
+        dispatch({ type: 'setLoading', payload: false });
+        isSubmittingRef.current = false;
+      }
+    },
+    [
+      state.loading,
       state.history,
       state.aspectRatio,
       state.imageSize,
@@ -640,6 +742,7 @@ export function useChatSession(): UseChatSessionResult {
         });
       },
       sendPrompt,
+      retryRequest,
       reset,
       downloadImage,
     },

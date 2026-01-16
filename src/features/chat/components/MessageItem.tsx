@@ -2,11 +2,11 @@ import { useState, type HTMLAttributes, type MouseEvent, type ReactNode } from '
 import ReactMarkdown from 'react-markdown'
 import type { Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { Download, Copy, Check, Trash2 } from 'lucide-react'
+import { Download, Copy, Check, Trash2, RefreshCw } from 'lucide-react'
 import { ImageLightbox } from '@/components/ImageLightbox'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import type { ChatMessage } from '@/features/chat/types'
+import type { ChatMessage, RetryContext } from '@/features/chat/types'
 import { getThumbSize } from '../utils/thumb'
 
 const USER_IMAGE_MAX_EDGE = 80
@@ -82,9 +82,10 @@ type MessageItemProps = {
   message: ChatMessage
   onDownload: (base64: string) => void
   onDelete: (id: string) => void
+  onRetry: (ctx: RetryContext, errorMessageId: string) => void
 }
 
-export function MessageItem({ message, onDownload, onDelete }: MessageItemProps) {
+export function MessageItem({ message, onDownload, onDelete, onRetry }: MessageItemProps) {
   const isUser = message.role === 'user'
   const [copied, setCopied] = useState(false)
   const [lightboxOpen, setLightboxOpen] = useState(false)
@@ -129,7 +130,7 @@ export function MessageItem({ message, onDownload, onDelete }: MessageItemProps)
           message.isError ? "bg-destructive/10 border-destructive text-destructive" : "",
         )}
       >
-        {/* 气泡操作：复制 / 删除 */}
+        {/* 气泡操作：重试/重新生成 / 复制 / 删除 */}
         <div
           className={cn(
             "absolute -right-2 -top-2 flex items-center gap-1 rounded-full border px-1 py-1 shadow-sm backdrop-blur",
@@ -137,6 +138,22 @@ export function MessageItem({ message, onDownload, onDelete }: MessageItemProps)
             "opacity-0 translate-y-0.5 group-hover/bubble:opacity-100 group-hover/bubble:translate-y-0 transition-all",
           )}
         >
+          {message.retryContext && (
+            <button
+              type="button"
+              onClick={() => onRetry(message.retryContext!, message.id)}
+              className={cn(
+                "h-7 w-7 inline-flex items-center justify-center rounded-full transition-colors",
+                message.isError
+                  ? "text-destructive hover:bg-destructive/10"
+                  : "text-muted-foreground hover:text-primary hover:bg-primary/10",
+              )}
+              aria-label={message.isError ? "重试" : "重新生成"}
+              title={message.isError ? "重试" : "重新生成"}
+            >
+              <RefreshCw className="h-3.5 w-3.5" />
+            </button>
+          )}
           {canCopy && (
             <button
               type="button"

@@ -14,6 +14,13 @@ export type AspectRatio = "1:1" | "16:9" | "4:3" | "3:4" | "9:16" | "5:4"
 export type ImageSize = "1K" | "2K" | "4K"
 export type ChatRole = "user" | "assistant" | "system"
 
+export interface RetryContext {
+  mode: ChatMode
+  prompt: string
+  uploadDataUrls: string[]
+  uploadItems: Array<{ base64: string; mimeType: string }>
+}
+
 export interface ChatMessage {
   id: string
   role: ChatRole
@@ -22,6 +29,7 @@ export interface ChatMessage {
   images?: string[]           // 用户上传的参考图
   imageData?: string          // AI生成的图片 (base64)
   isError?: boolean
+  retryContext?: RetryContext // 错误消息的重试上下文
   timestamp: string
 }
 

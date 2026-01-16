@@ -2,12 +2,13 @@ import { useEffect, useRef } from 'react'
 import { Image as ImageIcon, Sparkles } from 'lucide-react'
 import { MessageItem } from './MessageItem'
 import { Button } from '@/components/ui/button'
-import type { ChatMessage } from '@/features/chat/types'
+import type { ChatMessage, RetryContext } from '@/features/chat/types'
 
 type MessageListProps = {
   messages: ChatMessage[]
   onDownload: (base64: string) => void
   onDeleteMessage: (id: string) => void
+  onRetry: (ctx: RetryContext, errorMessageId: string) => void
   hasSavedConversation: boolean
   savedConversationAt: string | null
   onRestoreSavedConversation: () => void
@@ -18,6 +19,7 @@ export function MessageList({
   messages,
   onDownload,
   onDeleteMessage,
+  onRetry,
   hasSavedConversation,
   savedConversationAt,
   onRestoreSavedConversation,
@@ -75,6 +77,7 @@ export function MessageList({
               message={message}
               onDownload={onDownload}
               onDelete={onDeleteMessage}
+              onRetry={onRetry}
             />
           ))}
           <div ref={endRef} />

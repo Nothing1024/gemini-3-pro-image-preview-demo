@@ -38,6 +38,7 @@ function App() {
             messages={state.messages}
             onDownload={actions.downloadImage}
             onDeleteMessage={actions.deleteMessage}
+            onRetry={actions.retryRequest}
             hasSavedConversation={state.hasSavedConversation}
             savedConversationAt={state.savedConversationAt}
             onRestoreSavedConversation={actions.restoreSavedConversation}
